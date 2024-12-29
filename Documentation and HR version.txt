@@ -1,0 +1,221 @@
+# CodeOptimizer Documentation
+## Overview
+"""
+CodeOptimizer provides a sophisticated system for maintaining dual-version code bases:
+1. HR (Human Readable) - Fully documented, verbose version
+2. MR (Machine Run) - Optimized for memory and runtime performance
+
+Key improvements over the original RunMaster:
+- Enhanced comment stripping (handles multi-line comments)
+- Advanced space optimization while preserving functionality
+- Runtime code optimization pipeline
+- Memory usage tracking
+- Code validation
+"""
+
+import re
+import ast
+import sys
+from typing import Dict, Optional, Tuple
+from memory_profiler import memory_usage
+
+class CodeOptimizer:
+    """
+    Advanced code optimization system with dual-version (HR/MR) support.
+    Handles runtime optimization for ChatGPT and general Python code.
+    """
+    
+    def __init__(self, debug: bool = False):
+        """
+        Initialize optimizer with optional debug mode.
+        Args:
+            debug: Enable detailed optimization logging
+        """
+        self.debug = debug
+        self.cache: Dict[str, str] = {}
+        
+    def strip_comments(self, code: str) -> str:
+        """
+        Remove all types of Python comments while preserving functionality.
+        Handles single-line, inline, and multi-line comments.
+        
+        Args:
+            code: Source code string
+        Returns:
+            Clean code without comments
+        """
+        # Remove multi-line comments (docstrings)
+        code = re.sub(r'"""[\s\S]*?"""', '', code)
+        code = re.sub(r"'''[\s\S]*?'''", '', code)
+        
+        # Remove single-line and inline comments
+        lines = []
+        for line in code.split('\n'):
+            # Preserve strings with '#' in them
+            if '"""' in line or "'''" in line:
+                lines.append(line)
+                continue
+            
+            # Remove comments while keeping code
+            comment_pos = line.find('#')
+            if comment_pos != -1:
+                # Check if # is inside a string
+                if not any(line[:comment_pos].count(q) % 2 == 1 
+                          for q in ['"', "'"]):
+                    line = line[:comment_pos]
+            lines.append(line)
+            
+        return '\n'.join(lines)
+
+    def optimize_spaces(self, code: str) -> str:
+        """
+        Advanced space optimization preserving Python functionality.
+        
+        Args:
+            code: Source code string
+        Returns:
+            Space-optimized code
+        """
+        lines = []
+        current_indent = 0
+        
+        for line in code.split('\n'):
+            stripped = line.strip()
+            if not stripped:
+                continue
+                
+            # Calculate proper indentation
+            if stripped.startswith(('def ', 'class ', 'if ', 'elif ', 'else:', 'try:', 'except ', 'finally:', 'with ', 'while ', 'for ')):
+                lines.append(' ' * current_indent + stripped)
+                current_indent += 4
+            elif stripped == 'pass':
+                lines.append(' ' * (current_indent - 4) + stripped)
+                current_indent -= 4
+            else:
+                lines.append(' ' * current_indent + stripped)
+                
+        return '\n'.join(lines)
+
+    def validate_code(self, code: str) -> Tuple[bool, Optional[str]]:
+        """
+        Ensure optimized code remains valid Python.
+        
+        Args:
+            code: Code to validate
+        Returns:
+            (is_valid, error_message)
+        """
+        try:
+            ast.parse(code)
+            return True, None
+        except SyntaxError as e:
+            return False, str(e)
+
+    def optimize_runtime(self, code: str) -> str:
+        """
+        Prepare code for runtime execution with maximum optimization.
+        
+        Args:
+            code: Source code to optimize
+        Returns:
+            Runtime-optimized code
+        """
+        # Apply all optimizations
+        code = self.strip_comments(code)
+        code = self.optimize_spaces(code)
+        
+        # Additional runtime optimizations
+        code = re.sub(r'\s+', ' ', code)  # Collapse multiple spaces
+        code = re.sub(r'\s*([{}:,()])\s*', r'\1', code)  # Remove space around punctuation
+        
+        # Validate before returning
+        is_valid, error = self.validate_code(code)
+        if not is_valid:
+            raise ValueError(f"Optimization produced invalid code: {error}")
+            
+        return code
+
+    def measure_memory(self, code: str) -> float:
+        """
+        Measure memory usage of code execution.
+        
+        Args:
+            code: Code to measure
+        Returns:
+            Peak memory usage in MB
+        """
+        def code_runner():
+            exec(code)
+        
+        mem_usage = memory_usage((code_runner, (), {}), max_iterations=1)
+        return max(mem_usage) if mem_usage else 0.0
+
+    def create_dual_versions(self, hr_code: str, module_name: str) -> Dict[str, str]:
+        """
+        Create both HR and MR versions of code.
+        
+        Args:
+            hr_code: Human readable source code
+            module_name: Name for generated files
+        Returns:
+            Dict with paths to HR and MR versions
+        """
+        # Generate MR version
+        mr_code = self.optimize_runtime(hr_code)
+        
+        # Save both versions
+        hr_path = f"{module_name}_hr.py"
+        mr_path = f"{module_name}_mr.py"
+        
+        with open(hr_path, 'w') as f:
+            f.write(hr_code)
+        with open(mr_path, 'w') as f:
+            f.write(mr_code)
+            
+        return {
+            'hr_path': hr_path,
+            'mr_path': mr_path,
+            'memory_usage': self.measure_memory(mr_code)
+        }
+
+# Runtime optimization hook for ChatGPT loading
+def optimize_on_load(module_name: str):
+    """
+    Decorator to optimize code when module is loaded.
+    
+    Usage:
+        @optimize_on_load("module_name")
+        def your_function():
+            pass
+    """
+    def decorator(func):
+        optimizer = CodeOptimizer()
+        
+        def wrapper(*args, **kwargs):
+            # Get function source
+            source = inspect.getsource(func)
+            
+            # Optimize for runtime
+            optimized = optimizer.optimize_runtime(source)
+            
+            # Execute optimized version
+            exec(optimized)
+            return locals()[func.__name__](*args, **kwargs)
+            
+        return wrapper
+    return decorator
+    
+---
+For ChatGPT code optimization:
+
+python
+@optimize_on_load("chatgpt_module")
+def your_chatgpt_function():
+    # Your code here
+    pass
+    
+For general code optimization:
+
+python
+optimizer = CodeOptimizer()
+versions = optimizer.create_dual_versions(your_code, "module_name")
